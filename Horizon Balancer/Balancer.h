@@ -8,7 +8,7 @@
 	class Balancer:
 		Описывает весь функционал Балансировщика
 
-
+		
 	TODO:
 	1) getter и setter балансировщика
 */
@@ -37,9 +37,10 @@ public:
 	Host(int n_loads)
 	{
 		loads = std::vector<double>(n_loads);
-		max_load_trigger = std::vector<double>(n_loads);
-		max_time_trigger = std::vector<int>(n_loads);
+		max_load_trigger = std::vector<double>(n_loads, 0.85);
+		max_time_trigger = std::vector<int>(n_loads, 30);
 	};
+
 
 	/*
 		Конструктор класса Host
@@ -64,6 +65,7 @@ public:
 
 	~Host() {};
 
+
 	/*
 		Перегрузка оператора равенства.
 		Необходима при поиске элемента типа Host
@@ -80,6 +82,7 @@ public:
 	{
 		return id == obj->id;
 	}
+
 
 	/*
 		Данные хоста:
@@ -141,7 +144,11 @@ class VM
 {
 public:
 
-	VM() {};
+	VM()
+	{
+		priority = 1000;
+	};
+
 
 	/*
 		Конструктор класса VM
@@ -190,6 +197,7 @@ public:
 		return id == obj->id;
 	}
 
+
 	/*
 		Данные виртуальной машины:
 		--------------------------
@@ -227,6 +235,7 @@ private:
 
 		Host_under_danger() {};
 
+
 		/*
 			Перегрзука оператора равенства.
 			Необходима для поика элемента типа Host_under_danger
@@ -244,6 +253,7 @@ private:
 		{
 			return id == obj->id;
 		}
+
 
 		/*
 			Перегрзука оператора равенства.
@@ -281,8 +291,9 @@ private:
 	};
 
 
+public:
 	/*
-		Private данные Балансировщика:
+		Public данные Балансировщика:
 		------------------------------
 		vector<Host>:
 			 Все хосты, находящиеся в зоне ответственности данного балансировщика
@@ -290,12 +301,6 @@ private:
 		vector<Host_under_danger> hosts_under_danger:
 			 Хосты, за которыми установлено наблюдение из-за повышенной нагрузки
 	*/
-
-
-
-	//std::vector<Host_under_danger*> hosts_under_danger;
-
-public:
 
 	std::vector<Host_under_danger> hosts_under_danger;
 	std::vector<Host*> hosts;
@@ -366,7 +371,6 @@ public:
 				load_2 = approved_hosts[i]->loads[param_2];
 			}
 		}
-
 	}
 
 
@@ -385,7 +389,7 @@ public:
 	{
 		/*
 		 Если просят хост с мин cpu, то напрямую вызывай сортировку
-		 Если параметры нагрузок не увсех одинаковые, то два варианта:
+		 Если параметры нагрузок не у всех одинаковые, то два варианта:
 		   1) Уравнивать длину векторов, заполнять неизвестное нулями
 		   2) Смотреть по пересечению параметров нагрузки
 		*/
