@@ -18,7 +18,9 @@ json parse_json_config(std::string path = "labels_config.json")
          "Label_1":{
                     "cpu": cpu_value,
                     "ram": ram_value,
-                    "disk": disk_value
+                    "disk": disk_value,
+                    "priority": priority_value,
+                    "hosts": -1 or [host_id, host_id, ...]
                     }
         },
         "Label_2":...

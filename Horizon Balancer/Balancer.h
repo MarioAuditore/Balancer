@@ -13,216 +13,35 @@
 	1) getter и setter балансировщика
 */
 #pragma once
+// Специальные классы оюъектов виртуализации
+#include "Host.h"
+#include "VirtualMachine.h"
+// Парсинг конфигурационного файла
+#include "json_parser.h"
+// Запросы на сервер
+#include "opennebula_xmlrpc.h"
+// Обработчик ошибок
 #include <stdexcept>
-#include <algorithm>
+// Алгоритмы 
+#include <algorithm> 
+// Обработка строк
 #include <sstream>
 // STL
 #include <numeric>
-#include <vector>
 #include <set>
-#include <string>
 
 
-// Объявляем класс заранее, так как он используется в классе Host
-class VM;
 
-class Host
+
+
+/*
+	Функция для поиска машин нисшего приоритета при сортировке
+*/
+bool compare_priority(VM* vm_1, VM* vm_2)
 {
-public:
-
-	// Конструктор по умолчанию
-	Host() {};
-
-	// Конструктор, если задаем число нагрузок
-	Host(int n_loads)
-	{
-		loads = std::vector<double>(n_loads);
-		max_load_trigger = std::vector<double>(n_loads, 0.85);
-		max_time_trigger = std::vector<int>(n_loads, 30);
-	};
-
-
-	/*
-		Конструктор класса Host
-		----------
-		Параметры:
-			данные хоста.
-
-		Ставит флаг overload_rick по умолчанию false
-	*/
-	Host(int id_in,
-		std::vector<VM*> deployed_machines_in,
-		std::vector<double> max_load_trigger_in,
-		std::vector<int> max_time_trigger_in
-	) : id(id_in),
-		deployed_machines(deployed_machines_in),
-		max_load_trigger(max_load_trigger_in),
-		max_time_trigger(max_time_trigger_in)
-	{
-		overload_risk = false;
-		loads = std::vector<double>(max_load_trigger_in.size());
-	};
-
-	~Host() {};
-
-
-	/*
-		Перегрузка оператора равенства.
-		Необходима при поиске элемента типа Host
-		-----------
-		Параметры :
-			Host obj : объект для сравнения
-	*/
-	bool operator== (Host obj)
-	{
-		return id == obj.id;
-	}
-
-	bool operator== (Host* obj)
-	{
-		return id == obj->id;
-	}
-
-
-	/*
-		Данные хоста:
-		-------------
-		int id :
-			id хоста
-
-		vector<VM> deployed_machines :
-			Виртуальные машины, работающие на данном хосте
-
-		vector<double> loads :
-			 Вектор значений нагрузок в данный момент:
-			 1) cpu
-			 2) ram
-			 3) disk
-	*/
-
-	int id;
-
-	std::vector<VM*> deployed_machines;
-
-	std::vector<double> loads;
-
-
-	/*
-		Триггеры для балансировки:
-		--------------------------
-		vector<double> max_load_trigger:
-			 Вектор максимальных нагрузок каждого типа, при которых начнется отсчет времени
-			 1) max cpu load
-			 2) max ram load
-			 3) max disk load
-			 0 - нам все равно
-
-		vector<int> max_time_trigger:
-			 Вектор максимального допустимого времени критической нагрузки.
-			 Если нагрузка хоста не спадет в течение данного лимита, вызовется балансировщик
-			 1) max time of cpu load
-			 2) max time of ram load
-			 3) max time of disk load
-			 0 - нам все равно
-
-		bool overload_risk:
-			 Флаг, отображающий риск перегрузки хоста.
-			 True или же 1 - за хостом наблюдает балансировщик
-			 False или же 0 - за хостом наблюдения не требуется
-	*/
-
-	std::vector<double> max_load_trigger;
-
-	std::vector<int> max_time_trigger;
-
-	bool overload_risk = false;
-
-};
-
-
-class VM
-{
-public:
-
-	VM()
-	{
-		priority = 1000;
-	};
-
-
-	/*
-		Конструктор класса VM
-		-----------
-		Параметры :
-			Принимает на вход данные VM.
-	*/
-	VM(int id_in, int priority_in, Host* host_in, std::vector<Host*> approved_hosts_in) :
-		id(id_in), priority(priority_in), host(host_in), approved_hosts(approved_hosts_in)
-	{};
-
-	~VM() {};
-
-
-	/*
-		Перегрузка оператора присвоения.
-		Присваивает все поля присваимаего объекта
-		-----------
-		Параметры :
-			VM obj : присваиваемый объект класса
-	*/
-	void operator=(VM obj)
-	{
-		id = obj.id;
-		priority = obj.priority;
-		host = obj.host;
-		approved_hosts = obj.approved_hosts;
-
-	};
-
-
-	/*
-		Перегрузка оператора равенства.
-		Необходима при поиске объекта типа VM.
-		-----------
-		Параметры :
-			VM obj : объект для сравнения
-	*/
-	bool operator==(VM obj)
-	{
-		return id == obj.id;
-	}
-
-	bool operator==(VM* obj)
-	{
-		return id == obj->id;
-	}
-
-
-	/*
-		Данные виртуальной машины:
-		--------------------------
-		int id :
-			id машины
-
-		int priority:
-			Приоритет машины
-
-		Host host:
-			Хост, на котором VM сейчас развернута
-
-		vector<Host> approved_hosts:
-			id хостов, на которых машину можно разместить
-	*/
-
-	int id;
-
-	int priority;
-
-	Host* host;
-
-	std::vector<Host*> approved_hosts;
-};
-
+	return (vm_1->priority >= vm_2->priority);
+}
+ 
 
 class Balancer
 {
@@ -288,6 +107,7 @@ private:
 		int id;
 
 		std::vector<int> time = std::vector<int>(3);
+
 	};
 
 
@@ -304,6 +124,7 @@ public:
 
 	std::vector<Host_under_danger> hosts_under_danger;
 	std::vector<Host*> hosts;
+	json labels_config;
 
 	Balancer() {};
 
@@ -311,6 +132,11 @@ public:
 
 	Balancer(std::vector<Host*> hosts_in) : hosts(hosts_in) {};
 
+
+	void set_hosts_vector(std::vector<Host*> all_hosts_ptr)
+	{
+		hosts = all_hosts_ptr;
+	}
 
 	/*
 		Сортировка хостов по параметру
@@ -433,10 +259,12 @@ public:
 		// Число нагрузок
 		int n_loads = approved_hosts[0]->loads.size();
 		// Ответ на вопрос
-		bool answer;
+		bool answer = 0;
+		/*
 		std::cout << "Total amount of params " << n_loads << '\n'
 			<< "Do you want to customize the choice of optimal host?\n0 - No\n1 - Yes\n";
 		std::cin >> answer;
+		*/
 		if (answer)
 		{
 			bool param;
@@ -542,6 +370,8 @@ public:
 		return optimal_host;
 	}
 
+	
+	
 
 	/*
 		Функция для поиска VM внутри хоста и ее последующей миграции
@@ -556,7 +386,7 @@ public:
 				{1,1,0} - учитываем только cpu и ram
 				TODO: сценарий для {1,0,0} и подобных
 	*/
-	int balance_host(Host* host_to_balance)
+	int balance_host(Host* host_to_balance, string transport_type, string serverUrl, string session_string = "admin:admin")
 	{
 		std::cout << "A balancer for host " << host_to_balance->id << " is called\n";
 		// Самая важная машина имеет приоритет 0 -- ее не будет трогать балансировщик.
@@ -575,29 +405,87 @@ public:
 			return 2;
 		}
 
-		VM* machine_to_migrate = host_to_balance->deployed_machines[0];
+		
 
 		// Поиск VM для миграции
-		for (VM* machine : host_to_balance->deployed_machines)
+		std::sort(host_to_balance->deployed_machines.begin(), host_to_balance->deployed_machines.end(), compare_priority);
+
+		VM* machine_to_migrate = host_to_balance->deployed_machines[0];
+
+		/*for (VM* machine : host_to_balance->deployed_machines)
 		{
 			if ((machine->priority >= lowest_priority) && (machine->approved_hosts.size() > 1))
 			{
 				lowest_priority = machine->priority;
 				machine_to_migrate = machine;
 			}
-		}
+		}*/
 		// Поиск хоста для VM 
 		Host* host_for_VM = find_host_for_migration(machine_to_migrate->approved_hosts, host_to_balance);
-		// Миграция
-		std::cout << "Migration of VM " << machine_to_migrate->id << " from host " << machine_to_migrate->host->id << " to host " << host_for_VM->id << "\n";
-		// Удалим из списка старого хоста данную машину
-		machine_to_migrate->host->deployed_machines.erase(remove(machine_to_migrate->host->deployed_machines.begin(), machine_to_migrate->host->deployed_machines.end(), machine_to_migrate));
-		// Обозначим в машине ее новый хост
-		machine_to_migrate->host = host_for_VM;
-		// Добавим новую машину в список машин нового хоста
-		host_for_VM->deployed_machines.push_back(machine_to_migrate);
 
-		return 0;
+		/*
+			DEBUG
+		*/
+		bool live_migration = false;
+		/*
+			DEBUG
+		*/
+
+		// Настоящая миграция
+		if (migrate_vm(machine_to_migrate, host_for_VM->id, transport_type, serverUrl, session_string, live_migration, true, 0) == 0)
+		{
+			// Обновление информации в балансировщкие
+			std::cout << "Migration of VM " << machine_to_migrate->id << " from host " << machine_to_migrate->host->id << " to host " << host_for_VM->id << "\n";
+			// Удалим из списка старого хоста данную машину
+			machine_to_migrate->host->deployed_machines.erase(remove(machine_to_migrate->host->deployed_machines.begin(), machine_to_migrate->host->deployed_machines.end(), machine_to_migrate));
+			// Обозначим в машине ее новый хост
+			machine_to_migrate->host = host_for_VM;
+			// Добавим новую машину в список машин нового хоста
+			host_for_VM->deployed_machines.push_back(machine_to_migrate);
+
+			return 0;
+		}
+		// Если машину не удалось мигрировать
+		else
+		{
+			bool migration_failed = true;
+
+			for (int i = 1; i < host_to_balance->deployed_machines.size(); ++i)
+			{
+				// Если наткнулись на машину высшего приоритета, то мы либо достигли конца вектора, либо поиски не имеют смысла и следует остановиться
+				if (host_to_balance->deployed_machines[i]->priority == 0)
+				{
+					break;
+				}
+
+				if (host_to_balance->deployed_machines[i]->approved_hosts.size() > 1)
+				{
+					machine_to_migrate = host_to_balance->deployed_machines[i];
+
+					if (migrate_vm(machine_to_migrate, host_for_VM->id, transport_type, serverUrl, session_string, live_migration, true, 0) == 0)
+					{
+						migration_failed = false;
+						
+						// Обновление информации в балансировщкие
+						std::cout << "Migration of VM " << machine_to_migrate->id << " from host " << machine_to_migrate->host->id << " to host " << host_for_VM->id << "\n";
+						// Удалим из списка старого хоста данную машину
+						machine_to_migrate->host->deployed_machines.erase(remove(machine_to_migrate->host->deployed_machines.begin(), machine_to_migrate->host->deployed_machines.end(), machine_to_migrate));
+						// Обозначим в машине ее новый хост
+						machine_to_migrate->host = host_for_VM;
+						// Добавим новую машину в список машин нового хоста
+						host_for_VM->deployed_machines.push_back(machine_to_migrate);
+
+						return 0;
+					}
+				}
+			}
+
+			if (migration_failed)
+			{
+				cout << "Could not find migration solution for host " << host_to_balance->id << '\n';
+			}
+		}
+		
 	}
 
 
@@ -613,7 +501,7 @@ public:
 				 -- 1 для ram
 				 -- 2 для disk
 	*/
-	void check_load(int time_period, int load_type)
+	void check_load(int time_period, int load_type, string transport_type, string serverUrl, string session_string = "admin:admin")
 	{
 		for (int i = 0; i < hosts.size(); i++)
 		{
@@ -632,13 +520,13 @@ public:
 
 					// Увеличиваем счетчик времени, в течение которого хост испытывал критическую нагрузку
 					problematic_host.time[load_type] += time_period;
-					std::cout << "Host " << problematic_host.id << " is under critical load for " << problematic_host.time[load_type] << " seconds\n";
+					std::cout << "Host " << problematic_host.id << " is under critical load for " << problematic_host.time[load_type] << " time units. Max allowed is " << hosts[i]->max_time_trigger[load_type] << "\n";
 
 					// Если времени работы под критической нагрузкой прошло больше, чем дозволено
 					if (problematic_host.time[load_type] >= hosts[i]->max_time_trigger[load_type])
 					{
 						// Вызываем балансировщик хоста
-						int balance_host_result = balance_host(hosts[i]);
+						int balance_host_result = balance_host(hosts[i], transport_type, serverUrl, session_string);
 
 						if (balance_host_result != 2)
 						{

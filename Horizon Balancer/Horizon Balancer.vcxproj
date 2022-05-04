@@ -148,9 +148,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Balancer.h" />
+    <ClInclude Include="Host.h" />
     <ClInclude Include="json_parser.h" />
     <ClInclude Include="opennebula_xmlrpc.h" />
     <ClInclude Include="Testing.hpp" />
+    <ClInclude Include="VirtualMachine.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />

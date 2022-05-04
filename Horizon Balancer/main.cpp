@@ -2,6 +2,15 @@
 // которые уже перестали быть стандартом
 #define _HAS_AUTO_PTR_ETC 1
 
+// Определим систему чтобы понять тип транспорта для запросов
+#ifdef _WIN32
+#define	TRANSPORT_TYPE  "wininet"
+#endif
+
+#ifdef linux
+#define TRANSPORT_TYPE "curl"
+#endif
+
 // Ввод-вывод
 #include <iomanip>
 #include <iostream>
@@ -50,7 +59,7 @@ void print_VM_info(std::vector<VM*> machines)
 	std::cout << '\n';
 }
 
-void print_host_info(Host& host)
+void print_host_info(Host host)
 {
 	std::stringstream stream;
 	std::cout << "+" << std::setw(31) << std::setfill('-') << "+" << '\n';
@@ -95,65 +104,159 @@ void print_host_info(Host& host)
 
 }
 
+void print_host_info_rough(list<Host> all_hosts)
+{
+	for (list<Host>::iterator host = all_hosts.begin(); host != all_hosts.end(); ++host)
+	{
+		cout << "Host " << host->id << '\n';
+
+		for (double load : host->max_load_trigger)
+		{
+			cout << " - load trigger " << load << '\n';
+		}
+
+		for (double load : host->loads)
+		{
+			cout << " - curr load " << load << '\n';
+		}
+
+		for (int load_time : host->max_time_trigger)
+		{
+			cout << " - time trigger " << load_time << '\n';
+		}
+
+		for (VM* vm : host->deployed_machines)
+		{
+			cout << " - VM " << vm->id
+				<< " with datastore " << vm->datastore_id << '\n';
+			for (string label : vm->labels)
+			{
+				cout << " -- " << label << '\n';
+			}
+			for (Host* host : vm->approved_hosts)
+			{
+				cout << " -- Approved host " << host->id << '\n';
+			}
+		}
+	}
+}
 
 int main(int argc, char** argv)
 {
 	using namespace std;
 
-// Определим систему чтобы понять тип транспорта для запросов
-#ifdef _WIN32
-	const string transport_type = "wininet";
-#endif
-
-#ifdef linux
-	const string transport_type = "curl";
-#endif
 
 	// Проинициализируем остальные параметры для xml запросов
-	string const serverUrl;
-	string const session_string;
+	string serverUrl;
+	string session_string;
+	string transport_type = TRANSPORT_TYPE;
+	// Времянные интервалы ожидания
+	int time_period;
+	std::chrono::minutes chrono_period = std::chrono::minutes(time_period);
 
-	if (argc > 0)
+	if (argc > 1)
 	{
 		if (argc != 3)
 		{
 			cout << "Balancer accepts 2 arguments:\n"
 				<< "1) Url of a server: http://server_adress:2633/RPC2\n"
 				<< "2) Session string: login:password\n"
+				<< "3) Time interval between each iteration\n"
 				<< endl;
 			exit(1);
 		}
 		else
 		{
-			string const serverUrl = argv[0];
-			string const session_string = argv[1];
+			serverUrl = argv[0];
+			session_string = argv[1];
+
+			// Вводят в формате char, значит надо конвертировать по ASCII
+			time_period = (int)argv[2] - '0';
+			chrono_period = std::chrono::minutes(time_period);
 		}
 	}
 	else
 	{
-		string const serverUrl = "http://192.168.92.123:2633/RPC2";
-		string const session_string = "admin:admin";
+		serverUrl = "http://192.168.92.39:2633/RPC2";
+		session_string = "admin:admin";
+
+		time_period = 1;
+		chrono_period = std::chrono::minutes(time_period);
 	}
 
 	// Хранилища виртуальных машин и хостов
 	list<Host> all_hosts;
 	list<VM> all_VMs;
+	// Вектор ссылок на хосты, которым будет пользоваться балансировщик
+	vector<Host*> all_hosts_to_vector_ptr;
 	
-	update_host_vm_lists(all_hosts, all_VMs, transport_type, serverUrl, session_string);
+	
+	update_host_vm_lists(all_hosts, all_VMs, all_hosts_to_vector_ptr, transport_type, serverUrl, session_string);
 
-	for (list<Host>::iterator host = all_hosts.begin(); host != all_hosts.end(); ++host)
-	{
-		cout << "Host " << host->id << '\n';
-		for (VM* vm : host->deployed_machines)
-		{
-			cout << "-- VM " << vm->id << '\n';
-		}
-	}
+	print_host_info_rough(all_hosts);
+
+	update_host_vm_lists(all_hosts, all_VMs, all_hosts_to_vector_ptr, transport_type, serverUrl, session_string);
+
+
+	//auto vm_to_migrate = std::find_if(
+	//	all_VMs.begin(),
+	//	all_VMs.end(),
+	//	[](VM vm) {return vm.id == 21; }
+	//);
+	//cout << "Want to migrate vm " << vm_to_migrate->id;
+	//int migration_result = migrate_vm(&*vm_to_migrate, 0, transport_type, serverUrl, "admin:admin", false, true, 0);
+	//if (migration_result != 0)
+	//{
+	//	cout << "migration failure\n";
+	//}
 
 	for (Host host : all_hosts)
 	{
 		print_host_info(host);
 	}
+
+	Balancer balancer(all_hosts_to_vector_ptr);
+
+	cout << "Balancer's hosts:\n";
+	for (Host* host : balancer.hosts)
+	{
+		cout << "Host " << host->id << '\n';
+		print_host_info(*host);
+	}
+
+
+	cout << "\nEnter amount of iterations to produce:";
+	int n_iter;
+	cin >> n_iter;
+
+
+	for (int i = 0; i < n_iter; ++i)
+	{
+		
+		cout << "\n";
+		std::cout << std::format("--- {:^30} ---\n", "Iteration " + std::to_string(i));
+		cout << "\n";
+
+		// Всегда обновляем информацию
+		update_host_vm_lists(all_hosts, all_VMs, all_hosts_to_vector_ptr, transport_type, serverUrl, session_string);
+		// И поставляем обновленную информацию балансировщику
+		balancer.set_hosts_vector(all_hosts_to_vector_ptr);
+
+		for (Host host : all_hosts)
+		{
+			print_host_info(host);
+		}
+		
+		for (int load_type = 0; load_type < all_hosts.begin()->max_load_trigger.size(); ++load_type)
+		{
+			cout << "\n\n Checking load type " << load_type << "\n\n";
+			balancer.check_load(time_period, load_type, transport_type, serverUrl, session_string);
+		}
+
+		// Спим
+		std::this_thread::sleep_for(chrono_period);
+	}
+
 
 	/*
 	create_host(all_hosts);
@@ -320,7 +423,7 @@ int main(int argc, char** argv)
 
 
 
-	// Создадим связь между вектором хостов вектором, 
+	// Создадим связь между вектором хостов и вектором, 
 	// который мы скормим балансировщику
 	vector<Host*> all_hosts_to_vector_ptr;
 	for (int i = 0; i < all_hosts.size(); ++i)
